@@ -1,0 +1,198 @@
+import User from "../models/User.js";
+import Notification from "../models/Notification.js";
+import PrivateChat from "../models/PrivateChat.js";
+import GroupChat from "../models/groupChat.js";
+import GroupMember from "../models/GroupMember.js";
+import Message from "../models/Message.js";
+import { sequelize } from "../config/database.js";
+import { Op } from "sequelize";
+
+export const resolvers = {
+    Query: {
+        getUser: async (_, { id }) => {
+            const user = await User.findByPk(id);
+            return user;
+        },
+        getPrivateChat: async (_, { id }) => {
+            const privateChat = await PrivateChat.findByPk(id);
+            return privateChat;
+        },
+        getAPrivateChat: async (_, { uid, fid }) => {
+            const privateChats = await PrivateChat.findAll({
+                where: {
+                    [Op.or]: [{
+                        [Op.and]: [
+                            { userID: uid },
+                            { friendID: fid }
+                        ]
+                    }, {
+                        [Op.and]: [
+                            { userID: fid },
+                            { friendID: uid }
+                        ]
+                    }]
+                },
+            });
+            return privateChats;
+        },
+        getMessages: async (_, { chatid }) => {
+            const messages = await Message.findAll({
+                where: {
+                    ChatID: chatid
+                },
+                order: [['createdAt', 'DESC']]
+            });
+            return messages;
+        },
+        // getGroupChat: async (_, { id }) => {
+        //     const groupChat = await GroupChat.findByPk(id);
+        //     return groupChat;
+        // },
+        // getNotification: async (_, { id }) => {
+        //     const notification = await Notification.findByPk(id);
+        //     return notification;
+        // },
+        getAllPrivateChats: async (_, { id }) => {
+            const privateChats = await PrivateChat.findAll({
+                where: {
+                    [Op.or]: [
+                        { userID: id },
+                        { friendID: id }
+                    ]
+                },
+            });
+            return privateChats;
+        },
+        // getAllGroupChats: async (id) => {
+        //     const groupChats = await GroupChat.findAll();
+        //     return groupChats;
+        // },
+        // getAllNotifications: async (id) => {
+        //     const notifications = await Notification.findAll();
+        //     return notifications;
+        // },
+    },
+    Mutation: {
+        createUser: async (_, { user }) => {
+            const _user = User.build(user);
+
+            try {
+                const existinguser = await User.findAll({
+                    where: {
+                        [Op.or]: [{ UserName: user.UserName },
+                        { email: user.email }]
+                    },
+                });
+                if (existinguser.length > 0) {
+
+                    throw new Error('The username alrady chosen.');
+                }
+                await _user.validate();
+            } catch (error) {
+                const errorMessages = error.errors.map((err) => err.message);
+                throw new Error(errorMessages);
+            }
+
+            await _user.save();
+            return _user;
+        },
+        createPrivateChat: async (_, { privateChat }, { pubSub }) => {
+            try {
+                if (privateChat.userID !== privateChat.friendID) {
+
+                    const existingPrivateChats = await resolvers.Query.getAPrivateChat(
+                        _,
+                        { uid: privateChat.userID, fid: privateChat.friendID }
+                    );
+
+                    if (existingPrivateChats.length > 0) {
+
+                        throw new Error('Private chat already exists between these users.');
+                    }
+
+                    const newPrivateChat = await PrivateChat.create(privateChat);
+                    pubSub.publish('PrivateChat' + privateChat.friendID, newPrivateChat);
+                    pubSub.publish('PrivateChat' + privateChat.userID, newPrivateChat);
+                    return newPrivateChat;
+                } else {
+                    throw new Error(
+                        "Cannot create private chat with oneself!\nThe user has the same id as the friend!"
+                    );
+                }
+            } catch (error) {
+                throw error;
+            }
+        },
+        async createMessage(_, { message }, { pubSub }) {
+            try {
+                const newMessage = await Message.create(message);
+                pubSub.publish('newPrivateMessage' + message.ChatID, newMessage);
+                console.log(newMessage);
+                return newMessage;
+            } catch (error) {
+                throw new Error(error);
+            }
+        },
+
+        // createGroupChat: async (_, { groupChat }) => {
+
+        //     try {
+        //         createdGroupChat = await GroupChat.create(groupChat);
+        //          await GroupMember.create({ userID: groupV.CreatedBy, groupID: groupV.id });
+        //         return createdGroupChat;
+
+        //     } catch (error) {
+        //         throw error;
+        //     }}
+
+        // },
+        // createNotification: async (_, { notification }) => {
+        //     const newNotification = await Notification.create(notification);
+        //     return newNotification;
+        // },
+        // deleteUser: async (_, { id }) => {
+        //     const deletedUser = await User.destroy({ where: { id } });
+        //     return deletedUser > 0;
+        // },
+        // deletePrivateChat: async (_, { id }) => {
+        //     const deletedPrivateChat = await PrivateChat.destroy({ where: { id } });
+        //     return deletedPrivateChat > 0;
+        // },
+        // deleteGroupChat: async (_, { id }) => {
+        //     const deletedGroupChat = await GroupChat.destroy({ where: { id } });
+        //     return deletedGroupChat > 0;
+        // },
+        // deleteNotification: async (_, { id }) => {
+        //     const deletedNotification = await Notification.destroy({ where: { id } });
+        //     return deletedNotification > 0;
+        // },
+        // updateUser: async (_, { id, user }) => {
+        //     const updatedUser = await User.update(user, { where: { id } });
+        //     return updatedUser > 0 ? await User.findByPk(id) : null;
+        // },
+        // updatePrivateChat: async (_, { id, privateChat }) => {
+        //     const updatedPrivateChat = await PrivateChat.update(privateChat, { where: { id } });
+        //     return updatedPrivateChat > 0 ? await PrivateChat.findByPk(id) : null;
+        // },
+        // updateGroupChat: async (_, { id, groupChat }) => {
+        //     const updatedGroupChat = await GroupChat.update(groupChat, { where: { id } });
+        //     return updatedGroupChat > 0 ? await GroupChat.findByPk(id) : null;
+        // },
+        // updateNotification: async (_, { id, notification }) => {
+        //     const updatedNotification = await Notification.update(notification, { where: { id } });
+        //     return updatedNotification > 0 ? await Notification.findByPk(id) : null;
+        // },
+    },
+    Subscription: {
+        privateChats: {
+            subscribe: (_, { userID }, { pubSub }) => pubSub.subscribe("PrivateChat" + userID),
+            resolve: (payload) => { return [payload]; },
+        },
+        privatechat: {
+            subscribe: (_, { chatID }, { pubSub }) => pubSub.subscribe('newPrivateMessage' + chatID),
+            resolve: (payload) => { return [payload]; },
+
+        },
+    },
+
+};
