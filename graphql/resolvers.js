@@ -6,6 +6,9 @@ import GroupMember from "../models/GroupMember.js";
 import Message from "../models/Message.js";
 import { sequelize } from "../config/database.js";
 import { Op } from "sequelize";
+import bycrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { GraphQLError } from "graphql";
 
 export const resolvers = {
     Query: {
@@ -13,6 +16,14 @@ export const resolvers = {
             const user = await User.findByPk(id);
             return user;
         },
+        me(_, { }, context) {
+            if (context.currentUser === null) {
+                throw new Error('Unauthenticated!')
+            }
+
+            return context.currentUser
+        },
+
         getPrivateChat: async (_, { id }) => {
             const privateChat = await PrivateChat.findByPk(id);
             return privateChat;
@@ -44,6 +55,35 @@ export const resolvers = {
             });
             return messages;
         },
+        getUserByUserName:  async (_, { userName }, { pubSub, APP_SECRET, context }) => {
+            if (context=== null) {
+                throw GraphQLError("No authenticated user yet.");
+            } else {
+                const user =  await User.findOne({
+                    where: {
+                        UserName: userName
+                    }
+                
+            },)
+            return user;
+        }},
+        searchUsersByUserName: async (_, { query }, { pubSub, APP_SECRET, context }) => {
+            if (context=== null) {
+                throw GraphQLError("No authenticated user yet.");
+            } else {
+                const users = await User.findAll(
+                    {
+                        where: {
+                            UserName: {
+                                [Op.startsWith]: query
+                            }
+                        },
+                        order: [['UserName', 'ASC']]
+                    }
+                );
+                return users;
+            }
+        },
         // getGroupChat: async (_, { id }) => {
         //     const groupChat = await GroupChat.findByPk(id);
         //     return groupChat;
@@ -73,9 +113,9 @@ export const resolvers = {
         // },
     },
     Mutation: {
-        createUser: async (_, { user }) => {
+        register: async (_, { user }) => {
             const _user = User.build(user);
-
+            console.log(user);
             try {
                 const existinguser = await User.findAll({
                     where: {
@@ -92,10 +132,44 @@ export const resolvers = {
                 const errorMessages = error.errors.map((err) => err.message);
                 throw new Error(errorMessages);
             }
-
+            _user.passWord = await bycrypt.hash(_user.passWord, 12);
             await _user.save();
             return _user;
         },
+        login: async (_, { email, passWord }, { pubSub, APP_SECRET }) => {
+            try {
+                const theUser = await User.findOne({
+                    where: {
+                        email: email
+                    }
+                });
+                if (!theUser) {
+                    throw new GraphQLError('No User with this email has been registered!')
+                }
+                const valid = await bycrypt.compare(passWord, theUser.passWord);
+                if (!valid) {
+                    throw new GraphQLError('Incorrect password');
+                }
+                const payload = {
+                    id: theUser.id,
+                    UserName: theUser.UserName,
+                    email: theUser.email,
+                    IOSToken: theUser.IOSToken,
+                    AndroidToken: theUser.AndroidToken,
+                    Url_Profile_Picture: theUser.Url_Profile_Picture,
+                    JoinDate: theUser.JoinDate,
+                };
+                const token = jwt.sign(
+                    { payload },
+                    APP_SECRET,
+                    { expiresIn: "7 days" }
+                );
+                return token;
+            } catch (error) {
+                throw error;
+            }
+        },
+        
         createPrivateChat: async (_, { privateChat }, { pubSub }) => {
             try {
                 if (privateChat.userID !== privateChat.friendID) {
@@ -127,7 +201,6 @@ export const resolvers = {
             try {
                 const newMessage = await Message.create(message);
                 pubSub.publish('newPrivateMessage' + message.ChatID, newMessage);
-                console.log(newMessage);
                 return newMessage;
             } catch (error) {
                 throw new Error(error);

@@ -6,10 +6,11 @@ class User extends Model { }
 User.init(
   {
     id: {
-      type: DataTypes.UUID,
+      allowNull: false,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
-      unique: true,
-      
+      type: DataTypes.UUID,
+      unique:true
     },
     UserName:{ type:DataTypes.STRING,
       unique:true,
@@ -18,6 +19,10 @@ User.init(
     is: { args :['^(?=.{4,20}$)(?![_.])(?!.*[_.]{2})[a-zA-Z0-9._]+(?<![_.])$'],
       msg: 'Must be a valid userName',}
     }},
+    passWord :{
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     email: {
       type: DataTypes.STRING,
       allowNull: false,

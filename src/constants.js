@@ -1,0 +1,1 @@
+export const APP_SECRET = 'jfqfhoahfoh76jnfjohfnwbvdgkspzh5bbF4F3D29BBFGD';

@@ -41,6 +41,9 @@ type Query {
   getUser(id: ID!): User
   getPrivateChat(id: ID!): PrivateChat
   getMessages(chatid:ID!): [Message!]
+  me:User
+  getUserByUserName(userName: String!):User
+  searchUsersByUserName(query: String!):[User]
   # getGroupChat(id: Int!): GroupChat
   # getNotification(id: Int!): Notification
   # getMember(id:Int!):User
@@ -54,9 +57,10 @@ type Query {
 }
 
 input UserInput {
-  id:ID!
+  id:ID
   UserName: String
   email: String!
+  passWord:String!
   AndroidToken: String
   IOSToken: String
   Url_Profile_Picture: String
@@ -86,7 +90,7 @@ input NotificationInput {
 }
 
 type Mutation {
-  createUser(user: UserInput!): User!
+  #createUser(user: UserInput!): User!
   createPrivateChat(privateChat: PrivateChatInput!): PrivateChat!
   createMessage(message: MessageInput!): Message!
   # createGroupChat(groupChat: GroupChatInput!): GroupChat!
@@ -99,6 +103,8 @@ type Mutation {
   # updatePrivateChat(id: Int!, privateChat: PrivateChatInput!): PrivateChat!
   # updateGroupChat(id: Int!, groupChat: GroupChatInput!): GroupChat!
   # updateNotification(id: Int!, notification: NotificationInput!): Notification!
+  register(user: UserInput!): User!
+  login(email:String!, passWord:String!): String!
 }
 
 type Subscription {

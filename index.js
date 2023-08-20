@@ -4,23 +4,29 @@ import { typeDefs } from "./graphql/typeDefs.js";
 import { resolvers } from "./graphql/resolvers.js";
 import { WebSocketServer } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
+import { APP_SECRET } from './src/constants.js';
+import { authenticateUser } from "./src/auth.js";
+//import {YogaInitialContext } from './types.js';
 
 const pubSub = createPubSub();
-
 const yoga = createYoga({
   schema: createSchema({
-   typeDefs,
-   resolvers,
+    typeDefs,
+    resolvers,
   }),
   // to run websocket
   graphiql: {
     subscriptionsProtocol: "WS",
   },
-  // to notify listener of change through resolvers
-  context: {
-    pubSub,
-  },
+
+  context: (initialContext) => ({
+    pubSub, // to notify listener of change through resolvers
+    APP_SECRET,
+    currentUser: authenticateUser(initialContext.request),
+  })
 });
+
+
 
 const server = createServer(yoga);
 // initialize the server
